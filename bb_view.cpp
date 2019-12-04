@@ -6,7 +6,7 @@
 #include <pcl/point_types.h>
 #include <pcl/visualization/cloud_viewer.h>
 
-using namespace std::chrono_literals;
+using namespace std::literals::chrono_literals;
 
 int main (int argc, char** argv)
 {

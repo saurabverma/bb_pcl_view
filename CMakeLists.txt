@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
-project(moment_of_inertia)
+project(bb_pcl_view)
 
-find_package(PCL 1.8 REQUIRED)
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(PCL REQUIRED)
 
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
