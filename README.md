@@ -11,5 +11,5 @@ $ mkdir build
 $ cd build
 $ cmake ..
 $ make
-$ ./bb_view <pcdFile> <(optinal) txtFile>
+$ ./bb_view <pcdFile> <(optional) txtFile>
 ```

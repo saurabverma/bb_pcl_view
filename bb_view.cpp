@@ -210,7 +210,7 @@ int main(int argc, char **argv)
       {
         colour = 1;
       }
-      else if (line.find("Pedestrian ") != string::npos || line.find("Truck ") != string::npos)
+      else if (line.find("Pedestrian ") != string::npos || line.find("Truck ") != string::npos || line.find("Van ") != string::npos)
       // else if (line.find("Pedestrian ") != string::npos || line.find("Truck ") != string::npos)
       {
         colour = 2;
@@ -269,12 +269,12 @@ int main(int argc, char **argv)
         q.normalize();
         T_BB_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
 
-        // // DEBUG: Print out info
-        // cout << "Computed transformation of BB with respect to Camera frame: " << endl
-        //      << T_BB_wrt_camera_frame << endl;
+        // DEBUG: Print out info
+        cout << "Computed transformation of BB with respect to Camera frame: " << endl
+             << T_BB_wrt_camera_frame << endl;
 
-        Affine3f T_BB_wrt_camera_frame_(T_BB_wrt_camera_frame);
-        viewer->addCoordinateSystem(5.0, T_BB_wrt_camera_frame_, "bb");
+        // Affine3f T_BB_wrt_camera_frame_(T_BB_wrt_camera_frame);
+        // viewer->addCoordinateSystem(5.0, T_BB_wrt_camera_frame_, "bb_wrt_camera");
 
         // // TODO: Remove
         // T_cam_2_BB.setIdentity();
@@ -286,9 +286,9 @@ int main(int argc, char **argv)
         // Extract position and orientation from velodyne to bounding box tf
         auto T_BB_wrt_lidar_frame = T_camera_wrt_lidar_frame * T_BB_wrt_camera_frame;
         Vector3f position = T_BB_wrt_lidar_frame.block(0, 3, 3, 1);
-        cout << position(2) << ", " << height;
-        // position(2) -= 3* position(2) / 2;
-        cout << ", " << position(2) << endl;
+        // cout << position(2) << ", " << height; // DEBUG:
+        position(2) += height / 2; // Correction to z-axis (lidar frame) as centre seems to be on the ground
+        // cout << ", " << position(2) << endl;
         Matrix3f rot_mat = T_BB_wrt_lidar_frame.block(0, 0, 3, 3);
         Quaternionf orientation(rot_mat);
 
@@ -296,9 +296,9 @@ int main(int argc, char **argv)
         // cout << "Computed transformation of BB with respect to Lidar frame: " << endl
         //      << T_BB_wrt_lidar_frame << endl;
 
-        // // DEBUG: Check frame in the viewer
-        // Affine3f T_BB_wrt_lidar_frame_(T_BB_wrt_lidar_frame);
-        // viewer->addCoordinateSystem(5.0, T_BB_wrt_lidar_frame_, "bb");
+        // DEBUG: Check frame in the viewer
+        Affine3f T_BB_wrt_lidar_frame_(T_BB_wrt_lidar_frame);
+        viewer->addCoordinateSystem(5.0, T_BB_wrt_lidar_frame_, "bb");
 
         // Create bounding boxes in the viewer
         viewer->addCube(position, orientation, length, height, width, "wire" + to_string(item_count));
