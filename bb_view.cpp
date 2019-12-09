@@ -1,6 +1,18 @@
+
+/* Things to do:
+ * 
+ * [x] Include usage of text file for reading bounding box info
+ * [x] If possible, aplha colouring bounding box area
+ * [ ] Custom build bounding box for info obtained from text file
+ * [ ] Use yaml / text file to provide tf instead of direct encoding here
+ * [ ] Exact bounding box viz w.r.t. lidar frame
+ */
+
 // Basic lib
+#include <cmath>
 #include <vector>
 #include <thread>
+#include <fstream>
 
 // PCL lib
 #include <pcl/features/moment_of_inertia_estimation.h>
@@ -9,14 +21,26 @@
 #include <pcl/visualization/cloud_viewer.h>
 
 using namespace std;
+using namespace pcl;
 using namespace std::literals::chrono_literals;
+using namespace Eigen;
 
-/* Things to do:
- * 
- * [] Include usage of text file for reading bounding box info
- * [] Custom build bounding box for info obtained from text file
- * [] If possible, aplha colouring bounding box area
- */
+vector<string> string_split(string s, string delimiter)
+{
+  size_t pos_start = 0, pos_end, delim_len = delimiter.length();
+  string token;
+  vector<string> res;
+
+  while ((pos_end = s.find(delimiter, pos_start)) != string::npos)
+  {
+    token = s.substr(pos_start, pos_end - pos_start);
+    pos_start = pos_end + delim_len;
+    res.push_back(token);
+  }
+
+  res.push_back(s.substr(pos_start));
+  return res;
+}
 
 int main(int argc, char **argv)
 {
@@ -28,38 +52,41 @@ int main(int argc, char **argv)
   }
 
   // Load pointcloud file
-  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
-  if (pcl::io::loadPCDFile(argv[1], *cloud) == -1)
-    return (-1);
+  PointCloud<PointXYZ>::Ptr cloud(new PointCloud<PointXYZ>());
+  if (io::loadPCDFile(argv[1], *cloud) == -1)
+  {
+    cout << "Unable to open pcd file" << endl;
+    exit(1); // terminate with error
+  }
 
   // Create pcl viewer object and show the pointcloud
-  pcl::visualization::PCLVisualizer::Ptr viewer(new pcl::visualization::PCLVisualizer("3D Viewer"));
+  visualization::PCLVisualizer::Ptr viewer(new visualization::PCLVisualizer("3D Viewer"));
   viewer->setBackgroundColor(0, 0, 0);
-  viewer->addCoordinateSystem(1.0);
+  viewer->addCoordinateSystem(5.0, "lidar");
   viewer->initCameraParameters();
-  viewer->addPointCloud<pcl::PointXYZ>(cloud, "pointcloud");
+  viewer->addPointCloud<PointXYZ>(cloud, "pointcloud");
 
   // If only pcd given, compute and show whole pcd bounding box
   // Else, create bounding boxes as per the text file specs
   if (argc == 2)
   {
     // Moment of Inertia - Feature extraction
-    pcl::MomentOfInertiaEstimation<pcl::PointXYZ> feature_extractor;
+    MomentOfInertiaEstimation<PointXYZ> feature_extractor;
     feature_extractor.setInputCloud(cloud);
     feature_extractor.compute();
 
     // Variables definition
     // std::vector<float> moment_of_inertia; // unused variable
     // std::vector<float> eccentricity; // unused variable
-    pcl::PointXYZ min_point_AABB;
-    pcl::PointXYZ max_point_AABB;
-    pcl::PointXYZ min_point_OBB;
-    pcl::PointXYZ max_point_OBB;
-    pcl::PointXYZ position_OBB;
-    Eigen::Matrix3f rotational_matrix_OBB;
+    PointXYZ min_point_AABB;
+    PointXYZ max_point_AABB;
+    PointXYZ min_point_OBB;
+    PointXYZ max_point_OBB;
+    PointXYZ position_OBB;
+    Matrix3f rotational_matrix_OBB;
     // float major_value, middle_value, minor_value; // unused variable
-    Eigen::Vector3f major_vector, middle_vector, minor_vector;
-    Eigen::Vector3f mass_center;
+    Vector3f major_vector, middle_vector, minor_vector;
+    Vector3f mass_center;
 
     // Variables setup
     // feature_extractor.getMomentOfInertia(moment_of_inertia); // unused variable
@@ -74,31 +101,236 @@ int main(int argc, char **argv)
 
     // Add the bounding box based on computed variables
     viewer->addCube(min_point_AABB.x, max_point_AABB.x, min_point_AABB.y, max_point_AABB.y, min_point_AABB.z, max_point_AABB.z, 1.0, 1.0, 0.0, "AABB");
-    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION, pcl::visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "AABB");
-    Eigen::Vector3f position(position_OBB.x, position_OBB.y, position_OBB.z);
-    Eigen::Quaternionf quat(rotational_matrix_OBB);
-    viewer->addCube(position, quat, max_point_OBB.x - min_point_OBB.x, max_point_OBB.y - min_point_OBB.y, max_point_OBB.z - min_point_OBB.z, "OBB");
-    viewer->setShapeRenderingProperties(pcl::visualization::PCL_VISUALIZER_REPRESENTATION, pcl::visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "OBB");
+    viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "AABB");
+    Vector3f position(position_OBB.x, position_OBB.y, position_OBB.z);
+    Quaternionf orientation(rotational_matrix_OBB);
+    viewer->addCube(position, orientation, max_point_OBB.x - min_point_OBB.x, max_point_OBB.y - min_point_OBB.y, max_point_OBB.z - min_point_OBB.z, "OBB");
+    viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "OBB");
 
     // Add the centre of the pcd as a coordinate axis
-    pcl::PointXYZ center(mass_center(0), mass_center(1), mass_center(2));
-    pcl::PointXYZ x_axis(major_vector(0) + mass_center(0), major_vector(1) + mass_center(1), major_vector(2) + mass_center(2));
-    pcl::PointXYZ y_axis(middle_vector(0) + mass_center(0), middle_vector(1) + mass_center(1), middle_vector(2) + mass_center(2));
-    pcl::PointXYZ z_axis(minor_vector(0) + mass_center(0), minor_vector(1) + mass_center(1), minor_vector(2) + mass_center(2));
+    PointXYZ center(mass_center(0), mass_center(1), mass_center(2));
+    PointXYZ x_axis(major_vector(0) + mass_center(0), major_vector(1) + mass_center(1), major_vector(2) + mass_center(2));
+    PointXYZ y_axis(middle_vector(0) + mass_center(0), middle_vector(1) + mass_center(1), middle_vector(2) + mass_center(2));
+    PointXYZ z_axis(minor_vector(0) + mass_center(0), minor_vector(1) + mass_center(1), minor_vector(2) + mass_center(2));
     viewer->addLine(center, x_axis, 1.0f, 0.0f, 0.0f, "major eigen vector");
     viewer->addLine(center, y_axis, 0.0f, 1.0f, 0.0f, "middle eigen vector");
     viewer->addLine(center, z_axis, 0.0f, 0.0f, 1.0f, "minor eigen vector");
   }
   else
   {
-    // Read all data from the text file
-    
+    // Calibration matrix manual setup
+    Matrix4f T_lidar_wrt_camera_frame;
+    T_lidar_wrt_camera_frame.setIdentity();
+    // Translation
+    T_lidar_wrt_camera_frame(1, 3) = -0.08;
+    T_lidar_wrt_camera_frame(2, 3) = -0.27;
+    // Rotation
+    Quaternion<float> q = AngleAxisf(M_PI / 2, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(M_PI / 2, Vector3f::UnitZ());
+    q.normalize();
+    T_lidar_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
+    // Print out info
+    cout << "User-input transformation of Camera with respect to Lidar frame: " << endl
+         << T_lidar_wrt_camera_frame << endl;
 
-    // For each line, create a bounding box as described, iff the object is
-    // Car/Pedestrian/Cyclist . . . marked with different colours
-    
+    // Invert tf, lidar wrt camera
+    Matrix4f T_camera_wrt_lidar_frame;
+    T_camera_wrt_lidar_frame.setIdentity();
+    // Translation
+    T_camera_wrt_lidar_frame.block(0, 3, 3, 1) = -q.matrix().transpose() * T_lidar_wrt_camera_frame.block(0, 3, 3, 1);
+    // Rotation
+    T_camera_wrt_lidar_frame.block(0, 0, 3, 3) = q.matrix().transpose();
+    // Print out info
+    cout << "Computed transformation of Lidar with respect to Camera frame: " << endl
+         << T_camera_wrt_lidar_frame << endl;
+
+    // DEBUG: Visualization
+    Affine3f T_camera_wrt_lidar_frame_(T_camera_wrt_lidar_frame);
+    viewer->addCoordinateSystem(5.0, T_camera_wrt_lidar_frame_, "camera");
+
+    // // TODO: Remove
+    // // Read calibration values
+    // Affine3f T_vel_2_cam(T_vel_2_cam_);
+    // viewer->addCoordinateSystem(5.0, T_vel_2_cam, "camera");
+
+    // T_vel_2_cam.setIdentity();
+    // bool transform_set = false;
+    // ifstream CalibFile;
+    // CalibFile.open(argv[3]);
+    // if (!CalibFile)
+    // {
+    //   cout << "Unable to open calibration file";
+    //   exit(1); // terminate with error
+    // }
+    // while (getline(CalibFile, line))
+    // {
+    //   if (line.find("Tr_velo_to_cam") != string::npos)
+    //   {
+    //     vector<string> data = string_split(line, " ");
+    //     for (auto row = 0; row < 3; row++)
+    //     {
+    //       for (auto col = 0; col < 4; col++)
+    //       {
+    //         T_vel_2_cam(row, col) = stod(data[3 * col + row + 1]);
+    //       }
+    //     }
+
+    //     transform_set = true;
+    //     break;
+    //   }
+    // }
+    // if (!transform_set)
+    // {
+    //   cout << "Unable to obtain velodyne to camera calibration";
+    //   exit(1); // terminate with error
+    // }
+    // cout << T_vel_2_cam.matrix() << endl; // DEBUG:
+    // Affine3f temp;
+    // temp.setIdentity();
+    // temp.rotation
+    // cout << T_vel_2_cam.inverse().matrix() << endl; // DEBUG:
+
+    // Open text file
+    string line;
+    ifstream TextFile;
+    TextFile.open(argv[2]);
+    if (!TextFile)
+    {
+      cout << "Unable to open text file";
+      exit(1); // terminate with error
+    }
+
+    // For each line in the file, create a bounding box as described, iff the
+    // object is Car/Pedestrian/Cyclist . . . marked with different colours
+    int item_count = 0;
+    while (getline(TextFile, line))
+    {
+      // Check if true object
+      int colour = 0;
+      if (line.find("Car ") != string::npos)
+      {
+        colour = 1;
+      }
+      else if (line.find("Pedestrian ") != string::npos || line.find("Truck ") != string::npos)
+      // else if (line.find("Pedestrian ") != string::npos || line.find("Truck ") != string::npos)
+      {
+        colour = 2;
+      }
+      else if (line.find("Cyclist ") != string::npos)
+      {
+        colour = 3;
+      }
+
+      // Add bounding box with required colour scheme
+      if (colour != 0)
+      {
+        // Extract data from file
+        vector<string> data = string_split(line, " ");
+        // for (auto i : data) cout << i << endl; // DEBUG:
+
+        // data = cfg.CLASSES, -1, -1, alpha, img_boxes[k, 0], img_boxes[k, 1], img_boxes[k, 2], img_boxes[k, 3], bbox3d[k, 3], bbox3d[k, 4], bbox3d[k, 5], bbox3d[k, 0], bbox3d[k, 1], bbox3d[k, 2], bbox3d[k, 6], scores[k]
+
+        // k = object number inside each frame
+        // height, width, length = bbox3d[k, 3], bbox3d[k, 4], bbox3d[k, 5] = data[8:10]
+        // x, y, z (in camera coordinates) = bbox3d[k, 0], bbox3d[k, 1], bbox3d[k, 2] = data[11:13]
+        // Rotation ry around Y-axis in camera coordinates = bbox3d[k, 6] = data[14]
+
+        // Variables setup
+        item_count++;
+        float height = stod(data[8]);
+        float width = stod(data[9]);
+        float length = stod(data[10]);
+        float pos_x = stod(data[11]);
+        float pos_y = stod(data[12]);
+        float pos_z = stod(data[13]);
+        float ry = stod(data[14]);
+
+        // // TODO: Remove selective parts
+        // // Lidar frame
+        // Vector3f position(stod(data[11]), stod(data[12]), stod(data[13])); // x, y ,z
+        // // // Camera frame
+        // // Vector3f position(stod(data[13]), -stod(data[11]), -stod(data[12])); // z, -x, -y
+        // Quaternionf orientation;
+        // // orientation = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(yaw, Vector3f::UnitY()) * AngleAxisf(0.0, Vector3f::UnitZ());
+        // // orientation = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(yaw, Vector3f::UnitZ());
+        // orientation = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(yaw, Vector3f::UnitZ());
+
+        // TODO: Add calibration to the position and orientation, and then
+        // extract back the position and orientation
+
+        // Setup camera to bounding box transformation
+        Matrix4f T_BB_wrt_camera_frame;
+        T_BB_wrt_camera_frame.setIdentity();
+        // Translation
+        T_BB_wrt_camera_frame(0, 3) = pos_x;
+        T_BB_wrt_camera_frame(1, 3) = pos_y;
+        T_BB_wrt_camera_frame(2, 3) = pos_z;
+        // Rotation
+        Quaternion<float> q = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(ry, Vector3f::UnitY()) * AngleAxisf(0.0, Vector3f::UnitZ());
+        q.normalize();
+        T_BB_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
+
+        // // DEBUG: Print out info
+        // cout << "Computed transformation of BB with respect to Camera frame: " << endl
+        //      << T_BB_wrt_camera_frame << endl;
+
+        Affine3f T_BB_wrt_camera_frame_(T_BB_wrt_camera_frame);
+        viewer->addCoordinateSystem(5.0, T_BB_wrt_camera_frame_, "bb");
+
+        // // TODO: Remove
+        // T_cam_2_BB.setIdentity();
+        // T_cam_2_BB.translate(position);
+        // T_cam_2_BB.rotate(AngleAxis<float>(yaw, Vector3f::UnitY()));
+        // cout << colour << endl;              // DEBUG:
+        // cout << T_cam_2_BB.matrix() << endl; // DEBUG:
+
+        // Extract position and orientation from velodyne to bounding box tf
+        auto T_BB_wrt_lidar_frame = T_camera_wrt_lidar_frame * T_BB_wrt_camera_frame;
+        Vector3f position = T_BB_wrt_lidar_frame.block(0, 3, 3, 1);
+        cout << position(2) << ", " << height;
+        // position(2) -= 3* position(2) / 2;
+        cout << ", " << position(2) << endl;
+        Matrix3f rot_mat = T_BB_wrt_lidar_frame.block(0, 0, 3, 3);
+        Quaternionf orientation(rot_mat);
+
+        // // DEBUG: Print out info
+        // cout << "Computed transformation of BB with respect to Lidar frame: " << endl
+        //      << T_BB_wrt_lidar_frame << endl;
+
+        // // DEBUG: Check frame in the viewer
+        // Affine3f T_BB_wrt_lidar_frame_(T_BB_wrt_lidar_frame);
+        // viewer->addCoordinateSystem(5.0, T_BB_wrt_lidar_frame_, "bb");
+
+        // Create bounding boxes in the viewer
+        viewer->addCube(position, orientation, length, height, width, "wire" + to_string(item_count));
+        // viewer->addCube(position, orientation, width, length, height, "wire" + to_string(item_count));
+        viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "wire" + to_string(item_count));
+
+        viewer->addCube(position, orientation, length, height, width, "box" + to_string(item_count));
+        // viewer->addCube(position, orientation, width, length, height, "box" + to_string(item_count));
+        viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_SURFACE, "box" + to_string(item_count));
+        viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_OPACITY, 0.3, "box" + to_string(item_count)); // slightly transparent box
+
+        if (colour == 1)
+        {
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "wire" + to_string(item_count));
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "box" + to_string(item_count));
+        }
+        else if (colour == 2)
+        {
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "wire" + to_string(item_count));
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "box" + to_string(item_count));
+        }
+        else if (colour == 3)
+        {
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 0.0, 1.0, "wire" + to_string(item_count));
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 0.0, 1.0, "box" + to_string(item_count));
+        }
+      }
+    }
+
+    // Close the file
+    TextFile.close();
   }
-  
 
   while (!viewer->wasStopped())
   {
