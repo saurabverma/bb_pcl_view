@@ -1,11 +1,7 @@
 
-/* Things to do:
+/* Aim: Create a bounding box (about a pcl data) as dictated by the labels
  * 
- * [x] Include usage of text file for reading bounding box info
- * [x] If possible, aplha colouring bounding box area
- * [ ] Custom build bounding box for info obtained from text file
- * [ ] Use yaml / text file to provide tf instead of direct encoding here
- * [ ] Exact bounding box viz w.r.t. lidar frame
+ * Author: Dr. Saurab Verma
  */
 
 // Basic lib
@@ -45,9 +41,9 @@ vector<string> string_split(string s, string delimiter)
 int main(int argc, char **argv)
 {
   // File name, pcd and text only
-  if (argc < 2 || argc > 3)
+  if (argc < 2 || argc > 4)
   {
-    cout << "Usage: ./bb_view <pcd_file> <(optional) text_file>" << endl;
+    cout << "Usage: ./bb_view <pcd_file> <(optional) text_file> <(optional) theshold>" << endl;
     return (0);
   }
 
@@ -76,26 +72,20 @@ int main(int argc, char **argv)
     feature_extractor.compute();
 
     // Variables definition
-    // std::vector<float> moment_of_inertia; // unused variable
-    // std::vector<float> eccentricity; // unused variable
     PointXYZ min_point_AABB;
     PointXYZ max_point_AABB;
     PointXYZ min_point_OBB;
     PointXYZ max_point_OBB;
     PointXYZ position_OBB;
     Matrix3f rotational_matrix_OBB;
-    // float major_value, middle_value, minor_value; // unused variable
     Vector3f major_vector, middle_vector, minor_vector;
     Vector3f mass_center;
 
     // Variables setup
-    // feature_extractor.getMomentOfInertia(moment_of_inertia); // unused variable
-    // feature_extractor.getEccentricity(eccentricity); // unused variable
     // axis aligned bounding box
     feature_extractor.getAABB(min_point_AABB, max_point_AABB);
     // oriented bounding box
     feature_extractor.getOBB(min_point_OBB, max_point_OBB, position_OBB, rotational_matrix_OBB);
-    // feature_extractor.getEigenValues(major_value, middle_value, minor_value); // unused variable
     feature_extractor.getEigenVectors(major_vector, middle_vector, minor_vector);
     feature_extractor.getMassCenter(mass_center);
 
@@ -118,6 +108,15 @@ int main(int argc, char **argv)
   }
   else
   {
+    // Set threshold
+    float threshold = -1000.0;
+    if (argc == 4)
+    {
+      threshold = stod(argv[3]);
+      // DEBUG: Print out info
+      cout << "Threshold confidence value: " << threshold << endl;
+    }
+
     // Calibration matrix manual setup
     Matrix4f T_lidar_wrt_camera_frame;
     T_lidar_wrt_camera_frame.setIdentity();
@@ -128,7 +127,7 @@ int main(int argc, char **argv)
     Quaternion<float> q = AngleAxisf(M_PI / 2, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(M_PI / 2, Vector3f::UnitZ());
     q.normalize();
     T_lidar_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
-    // Print out info
+    // DEBUG: Print out info
     cout << "User-input transformation of Camera with respect to Lidar frame: " << endl
          << T_lidar_wrt_camera_frame << endl;
 
@@ -147,55 +146,13 @@ int main(int argc, char **argv)
     Affine3f T_camera_wrt_lidar_frame_(T_camera_wrt_lidar_frame);
     viewer->addCoordinateSystem(5.0, T_camera_wrt_lidar_frame_, "camera");
 
-    // // TODO: Remove
-    // // Read calibration values
-    // Affine3f T_vel_2_cam(T_vel_2_cam_);
-    // viewer->addCoordinateSystem(5.0, T_vel_2_cam, "camera");
-
-    // T_vel_2_cam.setIdentity();
-    // bool transform_set = false;
-    // ifstream CalibFile;
-    // CalibFile.open(argv[3]);
-    // if (!CalibFile)
-    // {
-    //   cout << "Unable to open calibration file";
-    //   exit(1); // terminate with error
-    // }
-    // while (getline(CalibFile, line))
-    // {
-    //   if (line.find("Tr_velo_to_cam") != string::npos)
-    //   {
-    //     vector<string> data = string_split(line, " ");
-    //     for (auto row = 0; row < 3; row++)
-    //     {
-    //       for (auto col = 0; col < 4; col++)
-    //       {
-    //         T_vel_2_cam(row, col) = stod(data[3 * col + row + 1]);
-    //       }
-    //     }
-
-    //     transform_set = true;
-    //     break;
-    //   }
-    // }
-    // if (!transform_set)
-    // {
-    //   cout << "Unable to obtain velodyne to camera calibration";
-    //   exit(1); // terminate with error
-    // }
-    // cout << T_vel_2_cam.matrix() << endl; // DEBUG:
-    // Affine3f temp;
-    // temp.setIdentity();
-    // temp.rotation
-    // cout << T_vel_2_cam.inverse().matrix() << endl; // DEBUG:
-
     // Open text file
     string line;
     ifstream TextFile;
     TextFile.open(argv[2]);
     if (!TextFile)
     {
-      cout << "Unable to open text file";
+      cout << "Unable to open text file" << endl;
       exit(1); // terminate with error
     }
 
@@ -243,87 +200,67 @@ int main(int argc, char **argv)
         float pos_y = stod(data[12]);
         float pos_z = stod(data[13]);
         float ry = stod(data[14]);
+        float confidence = stod(data[15]);
 
-        // // TODO: Remove selective parts
-        // // Lidar frame
-        // Vector3f position(stod(data[11]), stod(data[12]), stod(data[13])); // x, y ,z
-        // // // Camera frame
-        // // Vector3f position(stod(data[13]), -stod(data[11]), -stod(data[12])); // z, -x, -y
-        // Quaternionf orientation;
-        // // orientation = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(yaw, Vector3f::UnitY()) * AngleAxisf(0.0, Vector3f::UnitZ());
-        // // orientation = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(yaw, Vector3f::UnitZ());
-        // orientation = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(yaw, Vector3f::UnitZ());
-
-        // TODO: Add calibration to the position and orientation, and then
-        // extract back the position and orientation
-
-        // Setup camera to bounding box transformation
-        Matrix4f T_BB_wrt_camera_frame;
-        T_BB_wrt_camera_frame.setIdentity();
-        // Translation
-        T_BB_wrt_camera_frame(0, 3) = pos_x;
-        T_BB_wrt_camera_frame(1, 3) = pos_y;
-        T_BB_wrt_camera_frame(2, 3) = pos_z;
-        // Rotation
-        Quaternion<float> q = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(ry, Vector3f::UnitY()) * AngleAxisf(0.0, Vector3f::UnitZ());
-        q.normalize();
-        T_BB_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
-
-        // DEBUG: Print out info
-        cout << "Computed transformation of BB with respect to Camera frame: " << endl
-             << T_BB_wrt_camera_frame << endl;
-
-        // Affine3f T_BB_wrt_camera_frame_(T_BB_wrt_camera_frame);
-        // viewer->addCoordinateSystem(5.0, T_BB_wrt_camera_frame_, "bb_wrt_camera");
-
-        // // TODO: Remove
-        // T_cam_2_BB.setIdentity();
-        // T_cam_2_BB.translate(position);
-        // T_cam_2_BB.rotate(AngleAxis<float>(yaw, Vector3f::UnitY()));
-        // cout << colour << endl;              // DEBUG:
-        // cout << T_cam_2_BB.matrix() << endl; // DEBUG:
-
-        // Extract position and orientation from velodyne to bounding box tf
-        auto T_BB_wrt_lidar_frame = T_camera_wrt_lidar_frame * T_BB_wrt_camera_frame;
-        Vector3f position = T_BB_wrt_lidar_frame.block(0, 3, 3, 1);
-        // cout << position(2) << ", " << height; // DEBUG:
-        position(2) += height / 2; // Correction to z-axis (lidar frame) as centre seems to be on the ground
-        // cout << ", " << position(2) << endl;
-        Matrix3f rot_mat = T_BB_wrt_lidar_frame.block(0, 0, 3, 3);
-        Quaternionf orientation(rot_mat);
-
-        // // DEBUG: Print out info
-        // cout << "Computed transformation of BB with respect to Lidar frame: " << endl
-        //      << T_BB_wrt_lidar_frame << endl;
-
-        // DEBUG: Check frame in the viewer
-        Affine3f T_BB_wrt_lidar_frame_(T_BB_wrt_lidar_frame);
-        viewer->addCoordinateSystem(5.0, T_BB_wrt_lidar_frame_, "bb");
-
-        // Create bounding boxes in the viewer
-        viewer->addCube(position, orientation, length, height, width, "wire" + to_string(item_count));
-        // viewer->addCube(position, orientation, width, length, height, "wire" + to_string(item_count));
-        viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "wire" + to_string(item_count));
-
-        viewer->addCube(position, orientation, length, height, width, "box" + to_string(item_count));
-        // viewer->addCube(position, orientation, width, length, height, "box" + to_string(item_count));
-        viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_SURFACE, "box" + to_string(item_count));
-        viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_OPACITY, 0.3, "box" + to_string(item_count)); // slightly transparent box
-
-        if (colour == 1)
+        if (confidence > threshold)
         {
-          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "wire" + to_string(item_count));
-          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "box" + to_string(item_count));
-        }
-        else if (colour == 2)
-        {
-          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "wire" + to_string(item_count));
-          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "box" + to_string(item_count));
-        }
-        else if (colour == 3)
-        {
-          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 0.0, 1.0, "wire" + to_string(item_count));
-          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 0.0, 1.0, "box" + to_string(item_count));
+          // Setup camera to bounding box transformation
+          Matrix4f T_BB_wrt_camera_frame;
+          T_BB_wrt_camera_frame.setIdentity();
+          // Translation
+          T_BB_wrt_camera_frame(0, 3) = pos_x;
+          T_BB_wrt_camera_frame(1, 3) = pos_y;
+          T_BB_wrt_camera_frame(2, 3) = pos_z;
+          // Rotation
+          Quaternion<float> q = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(ry, Vector3f::UnitY()) * AngleAxisf(0.0, Vector3f::UnitZ());
+          q.normalize();
+          T_BB_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
+
+          // // DEBUG: Print out info
+          // cout << "Computed transformation of BB with respect to Camera frame: " << endl
+          //      << T_BB_wrt_camera_frame << endl;
+
+          // Extract position and orientation from velodyne to bounding box tf
+          auto T_BB_wrt_lidar_frame = T_camera_wrt_lidar_frame * T_BB_wrt_camera_frame;
+          Vector3f position = T_BB_wrt_lidar_frame.block(0, 3, 3, 1);
+          position(2) += height / 2; // Correction to z-axis (lidar frame) as centre seems to be on the ground
+          // cout << ", " << position(2) << endl;
+          Matrix3f rot_mat = T_BB_wrt_lidar_frame.block(0, 0, 3, 3);
+          Quaternionf orientation(rot_mat);
+
+          // // DEBUG: Print out info
+          // cout << "Computed transformation of BB with respect to Lidar frame: " << endl
+          //      << T_BB_wrt_lidar_frame << endl;
+
+          // Check frame in the viewer
+          Affine3f T_BB_wrt_lidar_frame_(T_BB_wrt_lidar_frame);
+          viewer->addCoordinateSystem(5.0, T_BB_wrt_lidar_frame_, "bb");
+
+          // Create bounding boxes in the viewer
+          viewer->addCube(position, orientation, length, height, width, "wire" + to_string(item_count));
+          // viewer->addCube(position, orientation, width, length, height, "wire" + to_string(item_count));
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "wire" + to_string(item_count));
+
+          viewer->addCube(position, orientation, length, height, width, "box" + to_string(item_count));
+          // viewer->addCube(position, orientation, width, length, height, "box" + to_string(item_count));
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_SURFACE, "box" + to_string(item_count));
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_OPACITY, 0.3, "box" + to_string(item_count)); // slightly transparent box
+
+          if (colour == 1)
+          {
+            viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "wire" + to_string(item_count));
+            viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 1.0, 0.0, 0.0, "box" + to_string(item_count));
+          }
+          else if (colour == 2)
+          {
+            viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "wire" + to_string(item_count));
+            viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 1.0, 0.0, "box" + to_string(item_count));
+          }
+          else if (colour == 3)
+          {
+            viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 0.0, 1.0, "wire" + to_string(item_count));
+            viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_COLOR, 0.0, 0.0, 1.0, "box" + to_string(item_count));
+          }
         }
       }
     }
