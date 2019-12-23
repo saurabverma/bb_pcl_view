@@ -246,11 +246,9 @@ int main(int argc, char **argv)
 
           // Create bounding boxes in the viewer
           viewer->addCube(position, orientation, length, height, width, "wire" + to_string(item_count));
-          // viewer->addCube(position, orientation, width, length, height, "wire" + to_string(item_count));
           viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "wire" + to_string(item_count));
 
           viewer->addCube(position, orientation, length, height, width, "box" + to_string(item_count));
-          // viewer->addCube(position, orientation, width, length, height, "box" + to_string(item_count));
           viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_SURFACE, "box" + to_string(item_count));
           viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_OPACITY, 0.3, "box" + to_string(item_count)); // slightly transparent box
 
