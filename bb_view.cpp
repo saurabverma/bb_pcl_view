@@ -200,7 +200,15 @@ int main(int argc, char **argv)
         float pos_y = stod(data[12]);
         float pos_z = stod(data[13]);
         float ry = stod(data[14]);
-        float confidence = stod(data[15]);
+        float confidence;
+        if (data.size() == 16)
+        {
+          confidence = stod(data[15]);
+        }
+        else
+        {
+          confidence = threshold + 1.0;
+        }
 
         if (confidence > threshold)
         {
