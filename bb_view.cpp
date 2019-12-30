@@ -150,8 +150,8 @@ int main(int argc, char **argv)
     T_lidar_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
     // DEBUG: Print out info
     if (kitti)
-    cout << "User-input transformation of Camera with respect to Lidar frame: " << endl
-         << T_lidar_wrt_camera_frame << endl;
+      cout << "User-input transformation of Camera with respect to Lidar frame: " << endl
+           << T_lidar_wrt_camera_frame << endl;
 
     // Invert tf, lidar wrt camera
     Matrix4f T_camera_wrt_lidar_frame;
@@ -267,10 +267,18 @@ int main(int argc, char **argv)
           viewer->addCoordinateSystem(5.0, T_BB_wrt_lidar_frame_, "bb");
 
           // Create bounding boxes in the viewer
-          viewer->addCube(position, orientation, length, height, width, "wire" + to_string(item_count));
-          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "wire" + to_string(item_count));
+          if (kitti)
+          {
+            viewer->addCube(position, orientation, length, height, width, "wire" + to_string(item_count));
+            viewer->addCube(position, orientation, length, height, width, "box" + to_string(item_count));
+          }
+          else
+          {
+            viewer->addCube(position, orientation, height, width, length, "wire" + to_string(item_count));
+            viewer->addCube(position, orientation, height, width, length, "box" + to_string(item_count));
+          }
 
-          viewer->addCube(position, orientation, length, height, width, "box" + to_string(item_count));
+          viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "wire" + to_string(item_count));
           viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_SURFACE, "box" + to_string(item_count));
           viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_OPACITY, 0.3, "box" + to_string(item_count)); // slightly transparent box
 
