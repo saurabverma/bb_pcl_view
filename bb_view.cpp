@@ -40,19 +40,45 @@ vector<string> string_split(string s, string delimiter)
 
 int main(int argc, char **argv)
 {
-  // File name, pcd and text only
-  if (argc < 2 || argc > 4)
+  //Help message
+  auto help_msg = "Usage: ./bb_view pcd_file <option(s)>\n\tpcd_file: path to pcd file to show\n\t-h: show this help message\n\t-l: path to text file containing label information (in kitti format)\n\t-t: threshold limit on scores\n\t-k: use Kitti specificed camera to lidar transformations";
+
+  // Setup input arguments
+  float threshold = -1000.0;
+  string label_filename = "";
+  bool kitti = false;
+  for (auto i = 1; i < argc; ++i)
   {
-    cout << "Usage: ./bb_view <pcd_file> <(optional) text_file> <(optional) theshold>" << endl;
-    return (0);
+    string arg = argv[i];
+    if (arg == "-h")
+    {
+      cout << help_msg << endl;
+      return 0;
+    }
+    else if (arg == "-l")
+    {
+      label_filename = argv[i + 1];
+    }
+    else if (arg == "-t")
+    {
+      // Set threshold
+      threshold = stod(argv[i + 1]);
+      // DEBUG: Print out info
+      cout << "Threshold confidence value: " << threshold << endl;
+    }
+    else if (arg == "-k")
+    {
+      kitti = true;
+    }
   }
 
   // Load pointcloud file
   PointCloud<PointXYZ>::Ptr cloud(new PointCloud<PointXYZ>());
   if (io::loadPCDFile(argv[1], *cloud) == -1)
   {
-    cout << "Unable to open pcd file" << endl;
-    exit(1); // terminate with error
+    cout << "Unable to open pcd file: " << argv[1] << endl
+         << help_msg << endl;
+    return 1; // terminate with error
   }
 
   // Create pcl viewer object and show the pointcloud
@@ -64,7 +90,7 @@ int main(int argc, char **argv)
 
   // If only pcd given, compute and show whole pcd bounding box
   // Else, create bounding boxes as per the text file specs
-  if (argc == 2)
+  if (label_filename == "")
   {
     // Moment of Inertia - Feature extraction
     MomentOfInertiaEstimation<PointXYZ> feature_extractor;
@@ -106,28 +132,24 @@ int main(int argc, char **argv)
     viewer->addLine(center, y_axis, 0.0f, 1.0f, 0.0f, "middle eigen vector");
     viewer->addLine(center, z_axis, 0.0f, 0.0f, 1.0f, "minor eigen vector");
   }
-  else
+  else // FIXME:
   {
-    // Set threshold
-    float threshold = -1000.0;
-    if (argc == 4)
-    {
-      threshold = stod(argv[3]);
-      // DEBUG: Print out info
-      cout << "Threshold confidence value: " << threshold << endl;
-    }
-
     // Calibration matrix manual setup
     Matrix4f T_lidar_wrt_camera_frame;
     T_lidar_wrt_camera_frame.setIdentity();
-    // Translation
-    T_lidar_wrt_camera_frame(1, 3) = -0.08;
-    T_lidar_wrt_camera_frame(2, 3) = -0.27;
-    // Rotation
-    Quaternion<float> q = AngleAxisf(M_PI / 2, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(M_PI / 2, Vector3f::UnitZ());
+    Quaternion<float> q = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(0.0, Vector3f::UnitZ());
+    if (kitti)
+    {
+      // Translation
+      T_lidar_wrt_camera_frame(1, 3) = -0.08;
+      T_lidar_wrt_camera_frame(2, 3) = -0.27;
+      // Rotation
+      q = AngleAxisf(M_PI / 2, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(M_PI / 2, Vector3f::UnitZ());
+    }
     q.normalize();
     T_lidar_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
     // DEBUG: Print out info
+    if (kitti)
     cout << "User-input transformation of Camera with respect to Lidar frame: " << endl
          << T_lidar_wrt_camera_frame << endl;
 
@@ -149,11 +171,11 @@ int main(int argc, char **argv)
     // Open text file
     string line;
     ifstream TextFile;
-    TextFile.open(argv[2]);
+    TextFile.open(label_filename);
     if (!TextFile)
     {
       cout << "Unable to open text file" << endl;
-      exit(1); // terminate with error
+      return 1; // terminate with error
     }
 
     // For each line in the file, create a bounding box as described, iff the
@@ -281,5 +303,5 @@ int main(int argc, char **argv)
     std::this_thread::sleep_for(100ms);
   }
 
-  return (0);
+  return 0;
 }
