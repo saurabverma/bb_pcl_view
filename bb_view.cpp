@@ -242,7 +242,15 @@ int main(int argc, char **argv)
           T_BB_wrt_camera_frame(1, 3) = pos_y;
           T_BB_wrt_camera_frame(2, 3) = pos_z;
           // Rotation
-          Quaternion<float> q = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(ry, Vector3f::UnitY()) * AngleAxisf(0.0, Vector3f::UnitZ());
+          Quaternion<float> q;
+          if (kitti)
+          {
+            q = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(ry, Vector3f::UnitY()) * AngleAxisf(0.0, Vector3f::UnitZ());
+          }
+          else
+          {
+            q = AngleAxisf(0.0, Vector3f::UnitX()) * AngleAxisf(0.0, Vector3f::UnitY()) * AngleAxisf(ry, Vector3f::UnitZ());
+          }
           q.normalize();
           T_BB_wrt_camera_frame.block(0, 0, 3, 3) = q.matrix();
 
@@ -267,16 +275,8 @@ int main(int argc, char **argv)
           viewer->addCoordinateSystem(5.0, T_BB_wrt_lidar_frame_, "bb");
 
           // Create bounding boxes in the viewer
-          if (kitti)
-          {
-            viewer->addCube(position, orientation, length, height, width, "wire" + to_string(item_count));
-            viewer->addCube(position, orientation, length, height, width, "box" + to_string(item_count));
-          }
-          else
-          {
-            viewer->addCube(position, orientation, height, width, length, "wire" + to_string(item_count));
-            viewer->addCube(position, orientation, height, width, length, "box" + to_string(item_count));
-          }
+          viewer->addCube(position, orientation, length, width, height, "wire" + to_string(item_count));
+          viewer->addCube(position, orientation, length, width, height, "box" + to_string(item_count));
 
           viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_WIREFRAME, "wire" + to_string(item_count));
           viewer->setShapeRenderingProperties(visualization::PCL_VISUALIZER_REPRESENTATION, visualization::PCL_VISUALIZER_REPRESENTATION_SURFACE, "box" + to_string(item_count));
